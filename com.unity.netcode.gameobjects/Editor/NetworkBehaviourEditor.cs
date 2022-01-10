@@ -4,11 +4,19 @@ using System.Reflection;
 using UnityEngine;
 using UnityEditor;
 
+#if ODIN_INSPECTOR
+using Sirenix.OdinInspector.Editor;
+#endif
+
 namespace Unity.Netcode.Editor
 {
     [CustomEditor(typeof(NetworkBehaviour), true)]
     [CanEditMultipleObjects]
+#if ODIN_INSPECTOR
+    public class NetworkBehaviourEditor : OdinEditor
+#else
     public class NetworkBehaviourEditor : UnityEditor.Editor
+#endif
     {
         private bool m_Initialized;
         private readonly List<string> m_NetworkVariableNames = new List<string>();
@@ -27,7 +35,7 @@ namespace Unity.Netcode.Editor
 
             m_NetworkVariableLabelGuiContent = new GUIContent("NetworkVariable", "This variable is a NetworkVariable. It can not be serialized and can only be changed during runtime.");
 
-            var fields = script.GetClass().GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+            var fields = script.GetClass().GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
             for (int i = 0; i < fields.Length; i++)
             {
                 var ft = fields[i].FieldType;
@@ -66,6 +74,8 @@ namespace Unity.Netcode.Editor
             var genericType = type.GetGenericArguments()[0];
 
             EditorGUILayout.BeginHorizontal();
+            bool disabled = m_NetworkVariableFields[m_NetworkVariableNames[index]].IsPrivate && !EditorApplication.isPlaying;
+            EditorGUI.BeginDisabledGroup(disabled);
             if (genericType.IsValueType)
             {
                 var method = typeof(NetworkBehaviourEditor).GetMethod("RenderNetworkVariableValueType", BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy | BindingFlags.NonPublic);
@@ -78,6 +88,7 @@ namespace Unity.Netcode.Editor
             }
 
             GUILayout.Label(m_NetworkVariableLabelGuiContent, EditorStyles.miniLabel, GUILayout.Width(EditorStyles.miniLabel.CalcSize(m_NetworkVariableLabelGuiContent).x));
+            EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndHorizontal();
         }
 
@@ -93,6 +104,8 @@ namespace Unity.Netcode.Editor
             // Only server can MODIFY. So allow modification if network is either not running or we are server
             if (behaviour.IsBehaviourEditable())
             {
+                EditorGUI.BeginChangeCheck();
+
                 if (type == typeof(int))
                 {
                     val = EditorGUILayout.IntField(name, (int)val);
@@ -142,7 +155,10 @@ namespace Unity.Netcode.Editor
                     EditorGUILayout.LabelField("Type not renderable");
                 }
 
-                networkVariable.Value = (T)val;
+                if (EditorGUI.EndChangeCheck())
+                {
+                    networkVariable.Value = (T)val;
+                }
             }
             else
             {
@@ -151,6 +167,45 @@ namespace Unity.Netcode.Editor
             }
         }
 
+        #if ODIN_INSPECTOR
+        public override void OnInspectorGUI()
+        {
+            // init
+            if (!m_Initialized)
+            {
+                serializedObject.Update();
+                var scriptProperty = serializedObject.FindProperty("m_Script");
+                if (scriptProperty == null)
+                {
+                    return;
+                }
+
+                var targetScript = scriptProperty.objectReferenceValue as MonoScript;
+                Init(targetScript);
+            }
+
+            // render regular serialized fields
+            InspectorUtilities.BeginDrawPropertyTree(Tree, true);
+            foreach (InspectorProperty property in Tree.EnumerateTree(false))
+            {
+                if (m_NetworkVariableNames.Contains(property.Name))
+                    continue;
+
+                property.Draw(property.Label);
+            }
+            InspectorUtilities.EndDrawPropertyTree(Tree);
+
+            // render network vars
+            EditorGUI.BeginChangeCheck();
+            serializedObject.Update();
+            for (int i = 0; i < m_NetworkVariableNames.Count; i++)
+            {
+                RenderNetworkVariable(i);
+            }
+            serializedObject.ApplyModifiedProperties();
+            EditorGUI.EndChangeCheck();
+        }
+        #else
         public override void OnInspectorGUI()
         {
             if (!m_Initialized)
@@ -211,5 +266,6 @@ namespace Unity.Netcode.Editor
             serializedObject.ApplyModifiedProperties();
             EditorGUI.EndChangeCheck();
         }
+        #endif
     }
 }
