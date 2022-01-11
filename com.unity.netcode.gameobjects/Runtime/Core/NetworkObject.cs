@@ -19,10 +19,10 @@ namespace Unity.Netcode
         internal uint GlobalObjectIdHash;
 
 #if UNITY_EDITOR
-        private void OnValidate()
+        /*private void OnValidate()
         {
             GenerateGlobalObjectIdHash();
-        }
+        }*/
 
         internal void GenerateGlobalObjectIdHash()
         {
