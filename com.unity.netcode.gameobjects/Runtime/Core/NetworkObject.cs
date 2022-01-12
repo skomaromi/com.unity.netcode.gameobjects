@@ -215,6 +215,14 @@ namespace Unity.Netcode
         {
             SetCachedParent(transform.parent);
         }
+        
+        private void Sync(ulong clientId)
+        {
+            for (int i = 0; i < ChildNetworkBehaviours.Count; i++)
+            {
+                ChildNetworkBehaviours[i].Sync(clientId);
+            }
+        }
 
         /// <summary>
         /// Shows a previously hidden <see cref="NetworkObject"/> to a client
@@ -245,6 +253,11 @@ namespace Unity.Netcode
             Observers.Add(clientId);
 
             NetworkManager.SpawnManager.SendSpawnCallForObject(clientId, this);
+
+            if (NetworkManager.NetworkConfig.UseSnapshotSpawn)
+            {
+                Sync(clientId);
+            }
         }
 
         /// <summary>

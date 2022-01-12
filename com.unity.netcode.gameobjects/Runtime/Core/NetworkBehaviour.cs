@@ -597,6 +597,32 @@ namespace Unity.Netcode
             }
         }
 
+        private static readonly List<int> k_SyncDirtiedFieldIndices = new List<int>();
+
+        internal void Sync(ulong clientId)
+        {
+            for (int j = 0; j < NetworkVariableFields.Count; j++)
+            {
+                var field = NetworkVariableFields[j];
+                if (field.IsDirty())
+                {
+                    continue;
+                }
+
+                k_SyncDirtiedFieldIndices.Add(j);
+                field.SetDirty(true);
+            }
+
+            VariableUpdate(clientId);
+
+            for (int k = 0; k < k_SyncDirtiedFieldIndices.Count; k++)
+            {
+                NetworkVariableFields[k_SyncDirtiedFieldIndices[k]].ResetDirty();
+            }
+
+            k_SyncDirtiedFieldIndices.Clear();
+        }
+
         internal void WriteNetworkVariableData(FastBufferWriter writer, ulong clientId)
         {
             if (NetworkVariableFields.Count == 0)
